@@ -1,0 +1,10 @@
+spring:
+    application:
+        name: template
+
+# application.yml
+swagger:
+    title: "프로젝트명 API"
+    description: "프로젝트 설명을 여기에 작성합니다"
+    version: "1.0.0"
+    external-docs-description: "프로젝트명 API 문서"
