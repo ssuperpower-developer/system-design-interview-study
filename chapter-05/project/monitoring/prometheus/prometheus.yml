@@ -7,7 +7,7 @@ scrape_configs:
   # Prometheus 자체 모니터링
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['host.docker.internal:9090']  # Prometheus 자신의 메트릭 수집
+      - targets: ['localhost:9090']  # Prometheus 자신의 메트릭 수집
     scrape_interval: 30s
 
   # Node Exporter (시스템 메트릭)
@@ -17,3 +17,8 @@ scrape_configs:
     scrape_interval: 15s
     metrics_path: /metrics
 
+  - job_name: 'spring-boot-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: [ 'host.docker.internal:8080' ]
+    scrape_interval: 30s
