@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #fff;
+            color: #202124;
+        }
+
+        .search-container {
+            max-width: 584px;
+            margin: 80px auto 0;
+            position: relative;
+            padding: 0 20px;
+        }
+
+        .logo-text {
+            font-size: 90px;
+            font-weight: normal;
+            color: #4285f4;
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        .search-wrapper {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            width: 100%;
+            height: 44px;
+            border: 1px solid #dfe1e5;
+            border-radius: 24px;
+            padding: 10px 48px 10px 16px;
+            font-size: 16px;
+            outline: none;
+            box-shadow: 0 2px 5px 1px rgba(64,60,67,.16);
+            background-color: #fff;
+            transition: border-radius 0.15s ease;
+            line-height: 24px;
+        }
+
+        /* 드롭다운이 표시될 때 검색창 스타일 */
+        .search-box.with-dropdown {
+            border-radius: 24px 24px 0 0;
+            border-bottom-color: transparent;
+        }
+
+        .search-icons {
+            position: absolute;
+            right: 16px;
+            top: 12px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-icon, .mic-icon {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+
+        .suggestions-container {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            border: 1px solid #dfe1e5;
+            border-top: 1px solid #e8eaed;
+            border-radius: 0 0 24px 24px;
+            box-shadow: 0 4px 6px rgba(32,33,36,.28);
+            background: #fff;
+            margin-top: -1px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .suggestions-container.show {
+            display: block;
+        }
+
+        .suggestion-item {
+            /* 검색창과 동일한 좌측 패딩 적용 */
+            padding: 14px 48px 14px 16px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #202124;
+            border-bottom: 1px solid #f8f9fa;
+            line-height: 24px;
+            /* 높이를 늘려서 항목 간 간격 확보 */
+            height: 52px;
+            display: flex;
+            align-items: center;
+        }
+
+        .suggestion-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+            border-radius: 0 0 24px 24px;
+        }
+
+        .search-buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .search-btn {
+            background-color: #f8f9fa;
+            border: 1px solid #f8f9fa;
+            border-radius: 4px;
+            color: #3c4043;
+            font-size: 14px;
+            margin: 0 4px;
+            padding: 0 20px;
+            height: 36px;
+            cursor: pointer;
+        }
+
+        .search-btn:hover {
+            box-shadow: 0 1px 1px rgba(0,0,0,.1);
+            background-color: #f1f3f4;
+        }
+
+        @media (max-width: 768px) {
+            .search-container {
+                margin-top: 40px;
+                padding: 0 16px;
+            }
+            .logo-text {
+                font-size: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <div class="logo-text">Search</div>
+
+        <div class="search-wrapper">
+            <input type="text"
+                   id="search-input"
+                   class="search-box"
+                   name="search"
+                   hx-post="/search"
+                   hx-trigger="keyup changed delay:500ms"
+                   hx-target="#suggestions"
+                   placeholder="Search..."
+                   autocomplete="off">
+
+            <div class="search-icons">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+                <svg class="mic-icon" viewBox="0 0 24 24" fill="#4285f4">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+            </div>
+
+            <div id="suggestions" class="suggestions-container"></div>
+        </div>
+
+        <div class="search-buttons">
+            <button class="search-btn" onclick="performSearch()">Google 검색</button>
+            <button class="search-btn" onclick="feelingLucky()">I'm Feeling Lucky</button>
+        </div>
+    </div>
+
+    <script>
+        function performSearch() {
+            const query = document.getElementById('search-input').value;
+            if (query.trim()) {
+                alert(`검색: ${query}`);
+            }
+        }
+
+        function feelingLucky() {
+            const query = document.getElementById('search-input').value;
+            if (query.trim()) {
+                alert(`Lucky 검색: ${query}`);
+            }
+        }
+
+        function selectSuggestion(suggestion) {
+            document.getElementById('search-input').value = suggestion;
+            hideSuggestions();
+        }
+
+        function showSuggestions() {
+            const container = document.getElementById('suggestions');
+            const searchBox = document.getElementById('search-input');
+            if (container.innerHTML.trim()) {
+                container.classList.add('show');
+                searchBox.classList.add('with-dropdown');
+            }
+        }
+
+        function hideSuggestions() {
+            const container = document.getElementById('suggestions');
+            const searchBox = document.getElementById('search-input');
+            container.classList.remove('show');
+            searchBox.classList.remove('with-dropdown');
+            container.innerHTML = '';
+        }
+
+        // HTMX 응답 후 자동으로 드롭다운 표시
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.target.id === 'suggestions') {
+                showSuggestions();
+            }
+        });
+
+        // 바깥 클릭 시 드롭다운 숨기기
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-wrapper')) {
+                hideSuggestions();
+            }
+        });
+
+        // 검색창 포커스 시 기존 제안이 있으면 다시 표시
+        document.getElementById('search-input').addEventListener('focus', function() {
+            const container = document.getElementById('suggestions');
+            if (container.innerHTML.trim() && this.value.trim()) {
+                showSuggestions();
+            }
+        });
+    </script>
+</body>
+</html>
