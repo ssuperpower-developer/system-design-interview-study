@@ -20,6 +20,25 @@ services:
       - monitoring
     restart: unless-stopped   # 컨테이너 자동 재시작
 
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'     # 설정 파일 경로
+      - '--storage.tsdb.path=/prometheus'                  # 데이터 저장 경로
+      - '--web.enable-lifecycle'                           # 설정 리로드 가능
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - monitoring
+    restart: unless-stopped   # 자동 재시작
+    depends_on:
+      - node-exporter   # node-exporter가 먼저 실행되어야 한다.
+
 networks:
   monitoring:
     driver: bridge

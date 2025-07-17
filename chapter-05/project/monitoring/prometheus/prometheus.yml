@@ -1,0 +1,19 @@
+# Prometheus 전역 설정
+global:
+  scrape_interval: 15s   # 15초마다 메트릭 수집
+  evaluation_interval: 15s   # 15초마다 알림 규칙 평가
+
+scrape_configs:
+  # Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']  # Prometheus 자신의 메트릭 수집
+    scrape_interval: 30s
+
+  # Node Exporter (시스템 메트릭)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
