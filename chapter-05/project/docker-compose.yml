@@ -69,6 +69,25 @@ services:
     depends_on:
       - prometheus
 
+  app:
+    build: .                                # 현재 디렉토리에서 Dockerfile로 빌드
+    container_name: spring-app              # 컨테이너 이름
+    ports:
+      - "8080:8080"                         # 외부:내부 포트 (Spring Boot 기본 포트)
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker       # Docker 환경용 프로파일
+    networks:
+      - monitoring                          # monitoring 네트워크 사용
+    restart: unless-stopped                 # 자동 재시작
+    depends_on:
+      - prometheus                          # prometheus가 먼저 실행되어야 함
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]  # 헬스체크
+      interval: 30s                         # 30초마다 체크
+      timeout: 10s                          # 10초 타임아웃
+      retries: 3                            # 3번 재시도
+      start_period: 60s                     # 시작 후 60초 대기
+
 
 networks:
   monitoring:

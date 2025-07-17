@@ -23,7 +23,14 @@ spring:
                     dialect: org.hibernate.dialect.MySQL8Dialect
 # application.yml
 swagger:
-    title: "프로젝트명 API"
-    description: "프로젝트 설명을 여기에 작성합니다"
+    title: "경보 및 모니터링 API"
+    description: "프로메테우스, 그라파나 테스트"
     version: "1.0.0"
     external-docs-description: "프로젝트명 API 문서"
+
+
+management:
+    endpoints:
+        web:
+            exposure:
+                include: "*"
