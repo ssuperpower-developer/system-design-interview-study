@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Node Exporter - 시스템 메트릭 수집 (CPU, 메모리, 디스크)
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro                  # 호스트 프로세스 정보 (읽기 전용)
+      - /sys:/host/sys:ro                    # 호스트 시스템 정보 (읽기 전용)
+      - /:/rootfs:ro
+    command: # Node Exporter 가 시스템 정보를 어디서 읽을지 설정
+      - '--path.procfs=/host/proc'           # 프로세스 정보 경로 설정
+      - '--path.rootfs=/rootfs'              # 루트 파일시스템 경로 설정
+      - '--path.sysfs=/host/sys'             # 시스템 정보 경로 설정
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'  # 제외할 마운트 포인트
+    networks:
+      - monitoring
+    restart: unless-stopped   # 컨테이너 자동 재시작
+
+networks:
+  monitoring:
+    driver: bridge
+
+# 컨테이너가 날아가도 남겨둘 데이터들
+volumes:
+  prometheus_data:
+  grafana_data:
