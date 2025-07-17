@@ -39,6 +39,23 @@ services:
     depends_on:
       - node-exporter   # node-exporter가 먼저 실행되어야 한다.
 
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # 비밀번호 설정
+    volumes:
+      - grafana_data:/var/lib/grafana       # Grafana 데이터 영구 저장
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning  # 자동 설정
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - prometheus       # 프로메테우스가 먼저 실행되어야 한다.
+
+
 networks:
   monitoring:
     driver: bridge
