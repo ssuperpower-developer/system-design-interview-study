@@ -8,11 +8,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 2048M
+          cpus: '8'
+          memory: 18432M
         reservations:
-          cpus: '1'
-          memory: 512M
+          cpus: '8'
+          memory: 18432M
     environment:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis  # 변경: localhost → redis
@@ -31,7 +31,7 @@ services:
     command: >
      bash -c "
        uv run python setup_redis.py &&
-       uv run gunicorn main:app --workers 3 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
+       uv run gunicorn main:app --workers 17 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
     restart: unless-stopped
     networks:
       - app-network
@@ -46,16 +46,19 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'          # Redis용 CPU 제한
-          memory: 800M         # 200MB 메모리 제한
+          cpus: '4'          # Redis용 CPU 제한
+          memory: 8192M        # 200MB 메모리 제한
         reservations:
-          cpus: '0.5'
-          memory: 400M
+          cpus: '4'
+          memory: 8192M
     # Redis 최적화 설정
     command: >
       redis-server 
-      --maxmemory 150mb 
-      --maxmemory-policy allkeys-lru 
+      --maxmemory 6gb
+      --maxmemory-policy allkeys-lru
+      --maxclients 2000
+      --io-threads 4
+      --io-threads-do-reads yes
       --save 60 100 
       --appendonly yes
       --appendfsync everysec
