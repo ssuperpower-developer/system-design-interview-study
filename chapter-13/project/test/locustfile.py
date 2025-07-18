@@ -165,18 +165,6 @@ def on_test_stop(environment, **kwargs):
     print(f"   테스트 상태: {recorder.results.get('test_status', 'UNKNOWN')}")
     print(f"   목표 달성: {'✅ YES' if recorder.results['target_achieved'] else '❌ NO'}")
 
-    # 성능 개선 제안
-    if recorder.results['failure_rate'] > 10:
-        print("\n💡 개선 제안:")
-        print("   - 사용자 수 감소 시도")
-        print("   - 서버 설정 최적화 필요")
-        print("   - 응답시간 초과 확인")
-    elif recorder.results['peak_qps'] < 7000:
-        print("\n💡 개선 제안:")
-        print("   - uvloop + httptools 조합 시도")
-        print("   - 워커 수 조정 고려")
-        print("   - 애플리케이션 코드 최적화")
-
     # 파일 저장
     recorder.save_results()
 
