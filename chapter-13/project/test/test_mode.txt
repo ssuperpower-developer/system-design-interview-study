@@ -1,0 +1,21 @@
+# asyncio + h11
+
+command: >
+ bash -c "
+   uv run python setup_redis.py &&
+   uv run gunicorn main:app --workers 17 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
+
+# uvloop + h11
+
+command: >
+  bash -c "
+    uv run python setup_redis.py &&
+    UVICORN_LOOP=uvloop UVICORN_HTTP=h11 uv run gunicorn main:app --workers 17 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
+
+# uvloop + httptools
+
+command: >
+  bash -c "
+    uv run python setup_redis.py &&
+    UVICORN_LOOP=uvloop UVICORN_HTTP=httptools uv run gunicorn main:app --workers 17 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
+

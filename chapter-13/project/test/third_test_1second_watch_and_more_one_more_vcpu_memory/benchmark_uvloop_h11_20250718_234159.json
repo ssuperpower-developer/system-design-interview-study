@@ -1,0 +1,15 @@
+{
+  "config": "uvloop_h11",
+  "start_time": 1752849686.4049559,
+  "end_time": 1752849719.028466,
+  "duration": 32.623510122299194,
+  "peak_qps": 0,
+  "peak_users": 0,
+  "total_requests": 160228,
+  "total_failures": 18578,
+  "failure_rate": 11.594727513293556,
+  "avg_response_time": 54.90893172048891,
+  "max_response_time": 252.94091599062085,
+  "target_achieved": false,
+  "test_status": "\u274c FAILED (\ub192\uc740 \uc2e4\ud328\uc728)"
+}
