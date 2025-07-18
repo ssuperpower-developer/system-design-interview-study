@@ -1,0 +1,15 @@
+{
+  "config": "asyncio_h11",
+  "start_time": 1752849509.5326688,
+  "end_time": 1752849542.730507,
+  "duration": 33.19783806800842,
+  "peak_qps": 0,
+  "peak_users": 0,
+  "total_requests": 166441,
+  "total_failures": 18832,
+  "failure_rate": 11.314519859890291,
+  "avg_response_time": 54.64355414645441,
+  "max_response_time": 255.29441609978676,
+  "target_achieved": false,
+  "test_status": "\u274c FAILED (\ub192\uc740 \uc2e4\ud328\uc728)"
+}

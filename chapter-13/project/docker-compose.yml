@@ -1,0 +1,88 @@
+# Docker Compose v2+ (version 속성 제거)
+
+services:
+  app:
+    build: .  # Dockerfile 사용
+    ports:
+      - "8000:8000"  # 외부 접근 가능
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 900M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis  # 변경: localhost → redis
+      - FORCE_REDIS_SETUP=false
+    # Redis 서비스가 healthy 상태가 될 때까지 대기
+    depends_on:
+      redis:
+        condition: service_healthy
+    # 헬스체크
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s  # Redis 초기화 시간 고려
+    command: >
+     bash -c "
+       uv run python setup_redis.py &&
+       UVICORN_LOOP=uvloop UVICORN_HTTP=httptools uv run gunicorn main:app --workers 17 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 30 --preload"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine  # 경량화된 Alpine 버전
+    # 포트를 외부에 노출하지 않음 (보안)
+    # ports 제거: 외부 접근 차단
+    expose:
+      - "6379"  # 내부 네트워크에서만 접근 가능
+    # Redis 메모리 제한 (EC2 프리티어 고려)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'          # Redis용 CPU 제한
+          memory: 1024M        # 200MB 메모리 제한
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Redis 최적화 설정
+    command: >
+      redis-server 
+      --maxmemory 6gb
+      --maxmemory-policy allkeys-lru
+      --maxclients 2000
+      --io-threads 4
+      --io-threads-do-reads yes
+      --save 60 100 
+      --appendonly yes
+      --appendfsync everysec
+    # Redis 데이터 영속성
+    volumes:
+      - redis-data:/data
+    # 헬스체크
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+# 네트워크 설정 (격리)
+networks:
+  app-network:
+    driver: bridge
+    internal: false  # 외부 인터넷 접근 허용
+
+# 볼륨 설정
+volumes:
+  redis-data:
+    driver: local

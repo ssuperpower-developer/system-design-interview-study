@@ -1,0 +1,15 @@
+{
+  "config": "uvloop_httptools",
+  "start_time": 1752845832.601085,
+  "end_time": 1752845865.8564649,
+  "duration": 33.25537991523743,
+  "peak_qps": 0,
+  "peak_users": 0,
+  "total_requests": 170581,
+  "total_failures": 21712,
+  "failure_rate": 12.728263991886552,
+  "avg_response_time": 54.72643147321737,
+  "max_response_time": 231.78687482140958,
+  "target_achieved": false,
+  "test_status": "\u274c FAILED (\ub192\uc740 \uc2e4\ud328\uc728)"
+}
