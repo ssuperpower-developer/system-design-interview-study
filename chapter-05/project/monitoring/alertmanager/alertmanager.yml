@@ -1,16 +1,57 @@
 global:
-  smtp_smarthost: 'localhost:587'
-  smtp_from: 'monitoring@localhost'
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: '${GMAIL_USERNAME}'
+  smtp_auth_username: '${GMAIL_USERNAME}'
+  smtp_auth_password: '${GMAIL_APP_PASSWORD}'
 
 route:
   group_by: ['alertname']
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
-  receiver: 'default-receiver'
+  receiver: 'web.hook'
 
 receivers:
-  - name: 'default-receiver'
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook'
-        send_resolved: true
+  - name: 'web.hook'
+    email_configs:
+      - to: 'your-email@gmail.com'
+        subject: '🚨 [모니터링 알림] {{ .GroupLabels.alertname }}'
+        body: |
+          **알림 발생!**
+          
+          **알림명**: {{ .GroupLabels.alertname }}
+          **심각도**: {{ .CommonLabels.severity }}
+          **발생시간**: {{ .CommonAnnotations.timestamp }}
+          
+          **상세 정보**:
+          {{ range .Alerts }}
+          - **인스턴스**: {{ .Labels.instance }}
+          - **설명**: {{ .Annotations.description }}
+          - **값**: {{ .Annotations.value }}
+          {{ end }}
+          
+          **대시보드**: http://localhost:3000
+          **Prometheus**: http://localhost:9090
+        html: |
+          <h2> 모니터링 알림</h2>
+          <table border="1" style="border-collapse: collapse;">
+            <tr><td><b>알림명</b></td><td>{{ .GroupLabels.alertname }}</td></tr>
+            <tr><td><b>심각도</b></td><td>{{ .CommonLabels.severity }}</td></tr>
+            <tr><td><b>발생시간</b></td><td>{{ .CommonAnnotations.timestamp }}</td></tr>
+          </table>
+          
+          <h3>영향받은 서비스:</h3>
+          <ul>
+          {{ range .Alerts }}
+            <li><b>{{ .Labels.instance }}</b>: {{ .Annotations.description }}</li>
+          {{ end }}
+          </ul>
+          
+          <p><a href="http://localhost:3000"> Grafana 대시보드</a> | <a href="http://localhost:9090"> Prometheus</a></p>
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']

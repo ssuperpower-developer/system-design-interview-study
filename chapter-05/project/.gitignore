@@ -183,3 +183,4 @@ gradle-app.setting
 ../.DS_Store
 
 src/main/resources/yml/application-secret.yml
+.env
