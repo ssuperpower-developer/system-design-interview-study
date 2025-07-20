@@ -32,5 +32,20 @@ COPY . .
 RUN echo '#!/bin/bash\ncurl -f http://localhost:8000/health || exit 1' > /healthcheck.sh \
     && chmod +x /healthcheck.sh
 
-# EC2 프리티어 스펙에 최적화된 Gunicorn 설정
-CMD ["uv", "run", "gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8000", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload"]
+# worker 설정이 kubernetis단에서 변경되었을 때 이곳도 함께 변경해야한다.
+CMD ["uv", "run", "gunicorn", "main:app", \
+     "-w", "4", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:8000", \
+     "--worker-connections", "2000", \
+     "--max-requests", "10000", \
+     "--max-requests-jitter", "1000", \
+     "--timeout", "120", \
+     "--graceful-timeout", "30", \
+     "--keep-alive", "5", \
+     "--backlog", "2048", \
+     "--preload", \
+     "--worker-tmp-dir", "/dev/shm", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "warning"]
