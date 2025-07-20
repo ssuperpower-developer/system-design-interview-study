@@ -1,182 +1,153 @@
-# 검색어 자동완성 시스템 - Software Requirements Specification
+# 8 CPU 환경에서의 24K QPS 목표 부하테스트 실행 보고서
+이 보고서는 8 CPU Minikube 환경에서 24,000 QPS (초당 쿼리) 목표를 달성하기 위해 최적화된 Kubernetes 배포 및 Locust 부하 테스트 설정에 대해 설명합니다. 사용자의 리소스 계산을 기반으로 구성이 수정되었습니다.
 
-## 1. 소개(Introduction)
+## 1. 리소스 계산 요약
 
-### 1.1. 목적(Purpose)
-본 SRS는 검색어 자동완성 시스템의 소프트웨어 요구사항을 정의한다. 이 문서는 개발자, 테스터, 사용자를 대상으로 한다.
+- **FastAPI Pods**: 4개 (초기 계산)
+- **Redis Pods**: 2개 (초기 계산)
+- **총 요청 CPU**: (4times1.5)+(2times0.25)=6.5 CPU
+- **총 요청 Memory**: (4times1.5)+(2times1)=8 GiB
 
-### 1.2. 범위(Scope)
-**제품명**: 검색어 자동완성 시스템 (AutoComplete Search System)
+## 2. Kubernetes 배포 설정
 
-**기능**:
-- 사용자가 입력한 접두어에 대해 최대 5개의 검색어 제안
-- 검색어 빈도 기반 정렬
-- 실시간 자동완성 결과 표시
+### 2.1. Redis Read-Only 배포
 
-**목표**: 빠른 응답속도(100ms 이내)로 사용자 경험을 향상시키는 검색어 자동완성 기능 제공
+Redis는 데이터 읽기 전용으로 설정되어 있으며, 고가용성과 성능을 위해 최적화되었습니다.
 
-### 1.3. 용어 및 약어 정의(Definitions, acronyms and abbreviations)
-- **Autocomplete**: 사용자가 입력한 접두어를 기반으로 완성된 검색어를 제안하는 기능
-- **Trie**: 문자열 검색에 특화된 트리 자료구조
-- **Prefix**: 사용자가 입력한 검색어의 앞부분
-- **QPS**: Queries Per Second, 초당 질의 수
+- **replicas**: 3개 파드
+- **리소스 요청**: CPU "250m", Memory "512Mi"
+- **리소스 제한**: CPU "500m", Memory "1Gi"
+- **이미지**: `redis-with-data:latest`
+- **활성/준비 프로브**: `redis-cli ping` 명령을 사용하여 Redis 인스턴스의 상태를 주기적으로 확인합니다.
+- **PostStart 훅**: 파드 시작 후 미리 로드된 데이터가 정상적으로 있는지 확인하는 스크립트가 실행됩니다.
+    
 
-### 1.4. 참고자료(References)
-- IEEE Std 830-1998 (Software Requirements Specification)
-- 가상 면접 사례로 배우는 대규모 시스템 설계 기초
+### 2.2. Redis 서비스
 
-### 1.5. 개요(Overview)
-이 문서는 전체 시스템 개요, 상세 요구사항, 성능 요구사항으로 구성된다.
+Redis 파드에 대한 내부 클러스터 IP 서비스를 제공합니다.
 
-## 2. 전체 시스템 개요(Overall description)
+- **타입**: `ClusterIP`
+- **포트**: 6379
 
-### 2.1. 제품 관점(Product perspective)
-독립적인 웹 애플리케이션으로, 검색 엔진의 프론트엔드 기능을 시뮬레이션한다.
+### 2.3. FastAPI (App) 배포
 
-#### 2.1.1. 사용자 인터페이스(User interfaces)
-- 웹 브라우저 기반 인터페이스
-- 검색창과 드롭다운 제안 목록
-- 반응형 디자인 지원
+FastAPI 애플리케이션은 높은 처리량을 위해 Gunicorn 워커와 함께 최적화되었습니다.
 
-#### 2.1.2. 하드웨어 인터페이스(Hardware interfaces)
-- 표준 PC 또는 모바일 기기
-- 키보드 및 터치 입력 지원
+- **replicas**: 6개 파드 (계산에 따라 조정됨)
+- **topologySpreadConstraints**: 파드가 여러 노드에 고르게 분산되도록 하여 가용성을 높입니다.
+- **리소스 요청**: CPU "1000m", Memory "1Gi"
+- **리소스 제한**: CPU "1500m", Memory "2Gi"
+- **이미지**: `autocomplete-system:latest`
+- **명령어**: Gunicorn을 사용하여 3개의 워커와 2000개의 워커 연결을 설정하여 동시성을 높였습니다.
+- **환경 변수**: Redis 연결 설정, Python 최적화, Gunicorn 설정 등 다양한 성능 관련 변수가 설정되었습니다. 특히 `REDIS_MAX_CONNECTIONS`, `REDIS_CONNECTION_POOL_SIZE`, `REDIS_SOCKET_KEEPALIVE` 등이 최적화되었습니다.
+- **활성/준비 프로브**: `/health` 엔드포인트를 통해 애플리케이션의 상태를 확인합니다.
 
-#### 2.1.3. 소프트웨어 인터페이스(Software interfaces)
-- 웹 브라우저 (Chrome, Firefox, Safari, Edge)
-- HTTP/HTTPS 프로토콜 지원
+### 2.4. FastAPI (App) 서비스
 
-### 2.2. 제품 기능(Product functions)
-1. **검색어 입력 처리**: 사용자가 입력한 문자열을 실시간으로 처리
-2. **자동완성 제안**: 입력된 접두어에 맞는 검색어 목록 생성
-3. **결과 정렬**: 빈도수 기반으로 제안 목록 정렬
-4. **결과 표시**: 최대 5개의 제안 검색어를 드롭다운으로 표시
+FastAPI 파드에 대한 내부 클러스터 IP 서비스를 제공합니다.
 
-### 2.3. 사용자 특성(User characteristics)
-- 일반적인 웹 사용자
-- 기본적인 검색 경험 보유
-- 다양한 연령대와 기술 수준
+- **타입**: `ClusterIP`
+- **포트**: 8000
 
-### 2.4. 제약사항(Constraints)
-- 영어 소문자만 지원
-- 최대 접두어 길이 50자
-- 메모리 사용량 제한 (1GB 이내)
-- 단일 서버 환경에서 동작
+### 2.5. Nginx Ingress
 
-### 2.5. 가정 및 의존성(Assumptions and dependencies)
-- 안정적인 네트워크 환경
-- 브라우저의 JavaScript 활성화
-- 미리 정의된 검색어 데이터셋 사용
+외부 트래픽을 FastAPI 서비스로 라우팅하며, 고성능을 위한 Nginx 설정을 포함합니다.
 
-## 3. 상세 요구사항(Specific requirements)
+- **타임아웃 설정**: 연결, 전송, 읽기 타임아웃을 30초로 설정했습니다.
+- **Keepalive 설정**: `upstream-keepalive-connections`를 1000, `upstream-keepalive-requests`를 10000으로 설정하여 24K RPS 목표에 대응합니다.
+- **버퍼 설정**: 프록시 버퍼링을 활성화하고 버퍼 크기를 최적화했습니다.
+- **요청 제한**: 바디 크기를 1MB로 제한합니다.
+- **성능 최적화**: HTTP/2 사용 및 `round_robin` 로드 밸런싱을 설정했습니다.
+- **연결 제한**: 최대 연결 수를 10000으로 설정했습니다.
+- **재시도 설정**: 오류 및 타임아웃 시 업스트림 재시도 로직을 구성했습니다.
 
-### 3.1. 외부 인터페이스 요구사항(External interface requirements)
+### 2.6. Horizontal Pod Autoscaler (HPA)
 
-#### 3.1.1. 사용자 인터페이스(User interfaces)
-- **검색창**: 텍스트 입력 필드 (최대 50자)
-- **드롭다운 목록**: 제안 검색어 표시 (최대 5개)
-- **키보드 네비게이션**: 방향키로 제안 목록 탐색
-- **마우스 선택**: 클릭으로 제안 검색어 선택
+CPU 및 메모리 사용률에 따라 파드 수를 자동으로 조정하여 트래픽 변화에 유연하게 대응합니다.
 
-#### 3.1.2. 소프트웨어 인터페이스(Software interfaces)
-- **API 엔드포인트**: `/api/autocomplete?q={prefix}`
-- **응답 형식**: JSON
-- **HTTP 메서드**: GET
+- **App HPA**:
+    - **최소/최대 replicas**: 6 / 7
+    - **메트릭**: CPU 사용률 70%, 메모리 사용률 75%
+- **Redis HPA**:
+    - **최소/최대 replicas**: 3 / 4
+    - **메트릭**: CPU 사용률 70%
 
-### 3.2. 기능 요구사항(Functional requirements)
+### 2.7. Pod Disruption Budget (PDB)
 
-#### 3.2.1. 검색어 자동완성 기능
-- **REQ-F001**: 사용자가 1글자 이상 입력할 때 자동완성 제안을 표시한다
-- **REQ-F002**: 입력된 접두어와 일치하는 검색어만 제안한다
-- **REQ-F003**: 최대 5개의 제안 검색어를 빈도순으로 정렬하여 표시한다
-- **REQ-F004**: 유효하지 않은 문자(숫자, 특수문자, 대문자) 입력 시 필터링한다
+자발적 중단(예: 노드 유지보수) 중에 애플리케이션의 최소 가용 파드 수를 보장하여 서비스 중단을 최소화합니다.
 
-#### 3.2.2. 데이터 처리 기능
-- **REQ-F005**: 미리 정의된 검색어 데이터셋을 메모리에 로드한다
-- **REQ-F006**: 트라이 자료구조를 사용하여 검색어를 저장한다
-- **REQ-F007**: 각 노드에 상위 5개 검색어를 캐시한다
+- **App PDB**: 최소 4개 파드 가용 보장 (총 6개 중)
+- **Redis PDB**: 최소 2개 파드 가용 보장 (총 3개 중)
 
-#### 3.2.3. 사용자 상호작용 기능
-- **REQ-F008**: 키보드 방향키로 제안 목록을 탐색할 수 있다
-- **REQ-F009**: Enter 키 또는 클릭으로 제안 검색어를 선택할 수 있다
-- **REQ-F010**: ESC 키로 제안 목록을 닫을 수 있다
+## 3. Locust 부하 테스트 설정
 
-### 3.3. 성능 요구사항(Performance requirements)
-- **REQ-P001**: 자동완성 응답 시간은 100ms 이내여야 한다
-- **REQ-P002**: 동시 사용자 100명을 지원해야 한다
-- **REQ-P003**: 시스템 시작 시 데이터 로딩 시간은 5초 이내여야 한다
+제공된 Locust 스크립트는 24,000 RPS 목표를 달성하기 위한 최적화된 부하 테스트 시나리오를 정의합니다.
 
-### 3.4. 논리적 데이터베이스 요구사항(Logical database requirements)
-- **REQ-D001**: 검색어와 빈도수 정보를 저장한다
-- **REQ-D002**: 트라이 노드 구조로 데이터를 조직한다
-- **REQ-D003**: 최소 1,000개의 검색어를 지원한다
+### 3.1. 주요 최적화
 
-### 3.5. 설계 제약사항(Design constraints)
-- **REQ-C001**: 웹 표준 기술(HTML, CSS, JavaScript) 사용
-- **REQ-C002**: 외부 라이브러리 의존성 최소화
-- **REQ-C003**: 단일 페이지 애플리케이션으로 구현
+- **공유 클라이언트 풀**: `geventhttpclient.client.HTTPClientPool`을 사용하여 12000개의 동시 연결을 지원하여 리소스 사용을 최적화하고 대규모 사용자 테스트를 가능하게 합니다.
+- **타임아웃**: 네트워크 및 연결 타임아웃을 120초로 연장하여 499 에러 발생 가능성을 줄였습니다.
+- **기본 헤더**: `Keep-Alive` 설정을 포함하여 연결 유지를 최적화했습니다.
+- **타이핑 간격**: `wait_time`을 0.05초에서 0.2초 사이로 설정하여 더 빠른 테스트를 시뮬레이션합니다.
+- **점진적 검색**: 랜덤 단어를 선택하여 한 글자씩 점진적으로 검색 요청을 보내는 시나리오를 구현했습니다.
+- **에러 핸들링**: 응답 코드 및 JSON 파싱 오류에 대한 명시적인 에러 핸들링을 포함합니다.
 
-### 3.6. 소프트웨어 시스템 속성(Software system attributes)
+### 3.2. 사용 예시
 
-#### 3.6.1. 신뢰성(Reliability)
-- **REQ-R001**: 시스템 가동 시간 99% 이상 보장
-- **REQ-R002**: 잘못된 입력에 대한 적절한 오류 처리
+Locust 스크립트 실행을 위한 권장 명령은 다음과 같습니다.
 
-#### 3.6.2. 가용성(Availability)
-- **REQ-A001**: 24시간 연속 운영 가능
-- **REQ-A002**: 서비스 중단 없이 데이터 갱신 가능
+```
+# 점진적 테스트
+locust -f locustfile.py --host=http://your-target \
+       --users=100 --spawn-rate=10 --run-time=5m
 
-#### 3.6.3. 보안성(Security)
-- **REQ-S001**: 입력 데이터 검증 및 필터링
-- **REQ-S002**: XSS 공격 방지
+# 1000 유저 테스트
+locust -f locustfile.py --host=http://your-target \
+       --users=1000 --spawn-rate=50 --run-time=10m
 
-#### 3.6.4. 유지 보수성(Maintainability)
-- **REQ-M001**: 모듈화된 코드 구조
-- **REQ-M002**: 설정 파일을 통한 데이터셋 교체 가능
+# 24K RPS 목표 테스트
+locust -f locustfile.py --host=http://your-target \
+       --users=2000 --spawn-rate=100 --run-time=15m
 
-#### 3.6.5. 이식성(Portability)
-- **REQ-P001**: 주요 웹 브라우저에서 동작
-- **REQ-P002**: 다양한 화면 크기 지원
-
-### 3.7. 상세 요구사항의 구성(Organizing the specific requirements)
-
-#### 3.7.1. 기능별 구성
-1. **Core Engine**: 트라이 자료구조 및 검색 알고리즘
-2. **API Layer**: HTTP 요청 처리 및 응답 생성
-3. **Frontend**: 사용자 인터페이스 및 상호작용
-4. **Data Layer**: 검색어 데이터 관리
-
-## 4. 추가 정보(Supporting information)
-
-### 4.1. 부록(Appendixes)
-
-#### A. 샘플 데이터 형식
-```json
-{
-  "suggestions": [
-    {"query": "apple", "frequency": 1000},
-    {"query": "application", "frequency": 800},
-    {"query": "apply", "frequency": 600}
-  ],
-  "prefix": "app",
-  "count": 3
-}
 ```
 
-#### B. API 응답 예시
-```json
-{
-  "status": "success",
-  "data": {
-    "suggestions": ["apple", "application", "apply"],
-    "prefix": "app",
-    "response_time": "15ms"
-  }
-}
-```
+## 4. 결론
 
-#### C. 성능 벤치마크 기준
-- 1,000개 검색어 기준 메모리 사용량: 10MB 이내
-- 평균 응답 시간: 50ms 이내
-- 최대 응답 시간: 100ms 이내
+이 보고서에 제시된 Kubernetes 배포 및 Locust 부하 테스트 설정은 8 CPU Minikube 환경에서 24,000 QPS 목표를 달성하기 위한 최적화된 접근 방식을 제공합니다. **Locust를 통한 부하 테스트 결과, 동시 사용자 2000명 환경에서 최대 9000 RPS (초당 요청 수)에 도달하는 성능을 확인했습니다.** 리소스 할당, 네트워크 설정, 자동 확장 및 안정성 확보를 통해 고성능 및 고가용성 시스템을 구축하는 데 기여할 것입니다.
 
+## 5. 트러블슈팅 및 학습 경험
+
+프로젝트를 진행하며 다음과 같은 주요 트러블슈팅과 학습 경험을 통해 시스템의 안정성과 성능을 지속적으로 개선했습니다.
+
+- **Minikube 환경 및 네트워크 문제 해결**:
+    
+    - `minikube tunnel` 사용 시 SSH 파일 디스크립터(FD) 고갈 문제가 발생하여 안정적인 연결 유지가 어려웠습니다.
+    - 이를 해결하기 위해 `nohup kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80 > ingress-forward.log 2>&1 &` 명령을 사용하여 `ingress-nginx-controller` 서비스의 포트 포워딩을 백그라운드에서 안정적으로 유지하는 방식을 도입했습니다.
+    - 이 과정에서 Kubernetes의 네트워크 구조 및 서비스 노출 방식에 대한 깊이 있는 이해를 얻었습니다.
+        
+- **단일 파드 성능 최적화**:
+    
+    - FastAPI 애플리케이션의 단일 파드 성능을 개선하기 위해 `uvloop` (비동기 이벤트 루프) 및 `httptools` (HTTP 파서)와 같은 고성능 라이브러리를 도입하고 관련 환경 변수를 설정했습니다.
+    - Gunicorn 워커 수(`WEB_CONCURRENCY`, `GUNICORN_WORKERS`) 및 워커 연결 수(`GUNICORN_WORKER_CONNECTIONS`)를 최적화하여 각 파드의 동시 처리량을 증대시켰습니다.
+        
+- **API 게이트웨이 및 부하 분산 개선**:
+    
+    - 초기에는 간단한 로드 밸런서를 사용하여 API를 노출했지만, 더 복잡한 트래픽 관리와 성능 최적화를 위해 Nginx Ingress로 전환했습니다.
+    - Nginx Ingress를 통해 연결 타임아웃, Keepalive 연결 수, 버퍼링, 요청 제한 등 상세한 성능 최적화 어노테이션을 적용하여 24K QPS 목표 달성을 위한 트래픽 처리 능력을 강화했습니다.
+        
+- **Redis 및 애플리케이션 안정성 확보**:
+    
+    - Redis `PostStart` 훅을 통해 미리 로드된 데이터의 상태를 확인하는 로직을 추가하여 초기 배포의 안정성을 확보했습니다.
+    - FastAPI 및 Redis에 대한 활성(Liveness) 및 준비(Readiness) 프로브를 세밀하게 설정하여 파드의 건강 상태를 정확히 모니터링하고 비정상 파드를 자동으로 재시작하거나 제거하도록 구성했습니다.
+    - Redis 연결 풀 크기(`REDIS_CONNECTION_POOL_SIZE`) 및 최대 연결 수(`REDIS_CONNECTION_POOL_SIZE`)를 조정하여 Redis 서버의 부하를 관리하고 연결 관련 문제를 최소화했습니다.
+        
+- **자동 확장 및 고가용성 전략 수립**:
+    
+    - CPU 및 메모리 사용률 기반의 Horizontal Pod Autoscaler(HPA)를 도입하여 트래픽 변동에 따른 파드 수를 자동으로 조절함으로써 시스템의 유연성을 확보했습니다.
+    - Pod Disruption Budget(PDB)을 설정하여 자발적 중단(예: 노드 유지보수) 시에도 서비스의 최소 가용 파드 수를 보장하여 서비스 중단을 최소화했습니다.
+    - `topologySpreadConstraints`를 통해 파드를 여러 노드에 고르게 분산 배치하여 단일 노드 장애에 대한 복원력을 강화했습니다.
+        
+- **부하 테스트를 통한 성능 병목 식별 및 해결**:
+    
+    - Locust 부하 테스트 스크립트의 타임아웃(`network_timeout`, `connection_timeout`)을 연장하고 공유 클라이언트 풀(`SHARED_CLIENT_POOL`)을 도입하여 대규모 동시 사용자 테스트 환경을 구축했습니다.
+    - 499(Client timeout) 에러와 같은 실제 부하 테스트 중 발생한 문제들을 해결하며 시스템의 병목 지점을 식별하고 개선하는 데 집중했습니다.
