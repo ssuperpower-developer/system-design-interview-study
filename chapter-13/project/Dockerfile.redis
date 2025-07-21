@@ -1,0 +1,68 @@
+# Multi-stage build로 데이터를 미리 로드한 Redis 이미지 생성
+FROM autocomplete-system:latest AS data-builder
+
+# Redis 임시 서버 시작을 위한 Redis 설치
+USER root
+RUN apt-get update && apt-get install -y redis-server && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Redis 백그라운드에서 시작하고 데이터 로드
+RUN mkdir -p /data && \
+    redis-server --daemonize yes --dir /data --dbfilename dump.rdb && \
+    sleep 5 && \
+    cd /app && \
+    REDIS_HOST=localhost REDIS_PORT=6379 FORCE_REDIS_SETUP=true uv run python setup_redis.py && \
+    redis-cli BGSAVE && \
+    sleep 10 && \
+    redis-cli SHUTDOWN SAVE || true && \
+    sleep 5
+
+# 데이터가 로드된 dump.rdb 파일 확인
+RUN ls -la /data/ && \
+    echo "Data file size:" && \
+    du -h /data/dump.rdb
+
+# 최종 Redis 이미지
+FROM redis:7-alpine
+
+# 미리 로드된 데이터 복사
+COPY --from=data-builder /data/dump.rdb /data/dump.rdb
+
+# 필요한 디렉토리 생성 및 권한 설정
+RUN mkdir -p /data /usr/local/etc/redis && \
+    chown redis:redis /data /data/dump.rdb
+
+# Redis 설정 파일 생성 (echo 방식으로 변경)
+RUN { \
+    echo "# Redis configuration for read-only autocomplete"; \
+    echo "dir /data"; \
+    echo "dbfilename dump.rdb"; \
+    echo "maxmemory 1500mb"; \
+    echo "maxmemory-policy allkeys-lru"; \
+    echo 'save ""'; \
+    echo "appendonly no"; \
+    echo "tcp-keepalive 60"; \
+    echo "timeout 0"; \
+    echo "maxclients 10000"; \
+} > /usr/local/etc/redis/redis.conf
+
+# 시작 스크립트 생성
+RUN { \
+    echo "#!/bin/sh"; \
+    echo "echo 'Starting Redis with pre-loaded autocomplete data...'"; \
+    echo "echo 'Data file info:'"; \
+    echo "ls -la /data/dump.rdb"; \
+    echo "echo 'Starting Redis server...'"; \
+    echo "exec redis-server /usr/local/etc/redis/redis.conf"; \
+} > /start-redis.sh
+
+RUN chmod +x /start-redis.sh
+
+USER redis
+EXPOSE 6379
+
+# 데이터 확인을 위한 헬스체크
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+    CMD redis-cli ping || exit 1
+
+CMD ["/start-redis.sh"]

@@ -1,0 +1,324 @@
+# 8 CPU Minikube 환경 및 24K QPS 목표에 맞게 최적화된 설정
+# 사용자의 리소스 계산을 기반으로 수정됨
+# FastAPI Pods: 4
+# Redis Pods: 2
+# 총 요청 CPU: (4 * 1.5) + (2 * 0.25) = 6.5 CPU
+# 총 요청 Memory: (4 * 1.5) + (2 * 1) = 8 GiB
+
+---
+# Redis Read-Only Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-readonly
+spec:
+  replicas: 3  # 계산에 따라 2개 파드로 조정
+  selector:
+    matchLabels:
+      app: redis
+      type: readonly
+  template:
+    metadata:
+      labels:
+        app: redis
+        type: readonly
+    spec:
+      containers:
+      - name: redis
+        image: redis-with-data:latest
+        imagePullPolicy: Never
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"    # 1 GiB 메모리 요청 (계산 기준)
+          limits:
+            cpu: "500m"      # 요청량의 2배로 제한 설정
+            memory: "1Gi"  # 약간의 여유를 둔 메모리 제한
+        ports:
+        - containerPort: 6379
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+          periodSeconds: 5
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - |
+                echo "Checking pre-loaded data..."
+                redis-cli keys "trie:*" | wc -l
+                echo "Sample keys:"
+                redis-cli keys "trie:*" | head -3
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+    type: readonly
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+---
+# App Deployment (FastAPI)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+spec:
+  replicas: 6 # 계산에 따라 6개 파드로 조정
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: app
+      containers:
+      - name: app
+        image: autocomplete-system:latest
+        imagePullPolicy: IfNotPresent
+        command: ["uv", "run", "gunicorn", "main:app",
+                 "--workers", "3",
+                 "--worker-class", "uvicorn.workers.UvicornWorker",
+                 "--bind", "0.0.0.0:8000",
+                 "--timeout", "60",
+                 "--preload",
+                 "--max-requests", "0",
+                 "--worker-connections", "2000",
+                 "--keep-alive", "10",
+                 "--worker-tmp-dir", "/dev/shm",
+                 "--access-logfile", "-",
+                 "--log-level", "warning"]
+        resources:
+          requests:
+            cpu: "1000m"     # 2000m → 1000m
+            memory: "1Gi"    # 1.5Gi → 1Gi
+          limits:
+            cpu: "1500m"     # 2500m → 1500m
+            memory: "2Gi"    # 3Gi → 2Gi
+        ports:
+        - containerPort: 8000
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: FORCE_REDIS_SETUP
+          value: "false"
+        - name: UVICORN_LOOP
+          value: "uvloop"
+        - name: UVICORN_HTTP
+          value: "httptools"
+        - name: REDIS_MAX_CONNECTIONS
+          value: "500"
+        - name: REDIS_CONNECTION_POOL_SIZE
+          value: "300"
+        - name: REDIS_SOCKET_KEEPALIVE
+          value: "true"
+        - name: REDIS_SOCKET_KEEPALIVE_OPTIONS
+          value: "1,10,3"  # 더 적극적인 keepalive
+        - name: PYTHONOPTIMIZE
+          value: "2"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: WEB_CONCURRENCY
+          value: "3"
+        - name: GUNICORN_WORKERS
+          value: "3"
+        - name: GUNICORN_WORKER_CONNECTIONS
+          value: "2000"
+        - name: GUNICORN_MAX_REQUESTS
+          value: "0"
+        - name: REDIS_POOL_RETRY_ON_TIMEOUT
+          value: "true"
+        - name: REDIS_HEALTH_CHECK_INTERVAL
+          value: "30"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+---
+# App Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+spec:
+  type: ClusterIP
+  selector:
+    app: app
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  sessionAffinity: None
+
+---
+# Nginx Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+
+    # 타임아웃 설정
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+
+    # Keepalive 설정 (24K RPS 대응)
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "1000"
+    nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "65"
+    nginx.ingress.kubernetes.io/upstream-keepalive-requests: "10000"
+
+    # 버퍼 설정
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-max-temp-file-size: "1024m"
+
+    # 요청 제한
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "1m"
+
+    # 성능 최적화
+    nginx.ingress.kubernetes.io/use-http2: "true"
+    nginx.ingress.kubernetes.io/load-balance: "round_robin"
+
+    # 연결 제한
+    nginx.ingress.kubernetes.io/limit-connections: "10000"
+
+    # 재시도 설정
+    nginx.ingress.kubernetes.io/proxy-next-upstream: "error timeout"
+    nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-next-upstream-tries: "3"
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 8000
+
+---
+# App HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app-deployment
+  minReplicas: 6      # deployment replicas와 일치
+  maxReplicas: 7      # CPU 한계로 7개까지만
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+
+---
+# Redis HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: redis-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: redis-readonly
+  minReplicas: 3      # 기본 파드 수와 일치
+  maxReplicas: 4      # 최대 4개까지 확장 허용
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# App Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb
+spec:
+  minAvailable: 4 # 6개 중 최소 4개
+  selector:
+    matchLabels:
+      app: app
+
+---
+# Redis Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+spec:
+  minAvailable: 2 # 3개 중 최소 2개 (안정성 확보)
+  selector:
+    matchLabels:
+      app: redis
+      type: readonly
