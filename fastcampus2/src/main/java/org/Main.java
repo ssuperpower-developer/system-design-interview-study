@@ -3,6 +3,7 @@ package org;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.resps.Tuple;
 
 import java.util.HashMap;
 import java.util.List;
@@ -77,21 +78,42 @@ public class Main {
 //                sinter.forEach(System.out::println);
 
                 // hash
-                jedis.hset("users:2:info", "name", "kim");
-                var userInfo = new HashMap<String, String>();
-                userInfo.put("email", "hi@naver.com");
-                userInfo.put("phone", "010-XXXX-XXXX");
+//                jedis.hset("users:2:info", "name", "kim");
+//                var userInfo = new HashMap<String, String>();
+//                userInfo.put("email", "hi@naver.com");
+//                userInfo.put("phone", "010-XXXX-XXXX");
+//
+//                jedis.hset("users:2:info", userInfo);
+//
+//                jedis.hdel("users:2:info", "phone");
+//
+//                System.out.println(jedis.hget("users:2:info", "email"));
+//                Map<String,String> user2Info = jedis.hgetAll("users:2:info");
+//                user2Info.forEach((k, v) -> System.out.println("key:" + k + ",value:" + v));
+//
+//                jedis.hincrBy("users:2:info", "visits", 1);
 
-                jedis.hset("users:2:info", userInfo);
+                // sorted set
+                var scores = new HashMap<String, Double>();
+                scores.put("user1", 100.0);
+                scores.put("user2", 30.0);
+                scores.put("user3", 50.0);
+                scores.put("user4", 80.0);
+                scores.put("user5", 15.0);
+                jedis.zadd("game2:scores", scores);
 
-                jedis.hdel("users:2:info", "phone");
+                List<String> zrange = jedis.zrange("game2:scores", 0, Long.MAX_VALUE);
+                zrange.forEach(System.out::println);
 
-                System.out.println(jedis.hget("users:2:info", "email"));
-                Map<String,String> user2Info = jedis.hgetAll("users:2:info");
-                user2Info.forEach((k, v) -> System.out.println("key:" + k + ",value:" + v));
+                List<Tuple> tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
+                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
 
-                jedis.hincrBy("users:2:info", "visits", 1);
+                System.out.println(jedis.zcard("game2:scores"));
 
+                jedis.zincrby("game2:scores", 100.0, "user5");
+
+                tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
+                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
             }
         }
     }
