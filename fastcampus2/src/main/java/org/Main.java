@@ -3,11 +3,13 @@ package org;
 import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.args.GeoUnit;
 import redis.clients.jedis.params.GeoSearchParam;
 import redis.clients.jedis.resps.GeoRadiusResponse;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 public class Main {
     public static void main(String[] args) {
@@ -115,35 +117,58 @@ public class Main {
 //                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
 
                 // geo
-                jedis.geoadd("stores2:geo", 127.02985530619755, 37.49911212874, "some1");
-                jedis.geoadd("stores2:geo", 127.0333352287619, 37.491921163986234, "some2");
+//                jedis.geoadd("stores2:geo", 127.02985530619755, 37.49911212874, "some1");
+//                jedis.geoadd("stores2:geo", 127.0333352287619, 37.491921163986234, "some2");
+//
+//                Double geodist = jedis.geodist("stores2:geo", "some1", "some2");
+//                System.out.println(geodist);
+//
+//                List<GeoRadiusResponse> radiusResponses1 = jedis.geosearch(
+//                        "stores2:geo",
+//                        new GeoCoordinate(127.033, 37.495),
+//                        500,
+//                        GeoUnit.M
+//                );
+//
+//                List<GeoRadiusResponse> radiusResponses2 = jedis.geosearch("stores2:geo",
+//                        new GeoSearchParam()
+//                                .fromLonLat(new GeoCoordinate(127.033, 37.495))
+//                                .byRadius(500, GeoUnit.M)
+//                                .withCoord()
+//                );
+//
+//                radiusResponses2.forEach(response -> {
+//                    System.out.println("%s %f %f".formatted(
+//                            response.getMemberByString(),
+//                            response.getCoordinate().getLatitude(),
+//                            response.getCoordinate().getLongitude()
+//                    ));
+//                });
+//
+//                jedis.unlink("stores2:geo");
 
-                Double geodist = jedis.geodist("stores2:geo", "some1", "some2");
-                System.out.println(geodist);
+                // bitmap
+                jedis.setbit("request-somepage-20250805", 100, true);
+                jedis.setbit("request-somepage-20250805", 200, true);
+                jedis.setbit("request-somepage-20250805", 300, true);
 
-                List<GeoRadiusResponse> radiusResponses1 = jedis.geosearch(
-                        "stores2:geo",
-                        new GeoCoordinate(127.033, 37.495),
-                        500,
-                        GeoUnit.M
-                );
+                System.out.println(jedis.getbit("request-somepage-20250805", 100));
+                System.out.println(jedis.getbit("request-somepage-20250805", 50));
 
-                List<GeoRadiusResponse> radiusResponses2 = jedis.geosearch("stores2:geo",
-                        new GeoSearchParam()
-                                .fromLonLat(new GeoCoordinate(127.033, 37.495))
-                                .byRadius(500, GeoUnit.M)
-                                .withCoord()
-                );
+                System.out.println(jedis.bitcount("request-somepage-20250805"));
 
-                radiusResponses2.forEach(response -> {
-                    System.out.println("%s %f %f".formatted(
-                            response.getMemberByString(),
-                            response.getCoordinate().getLatitude(),
-                            response.getCoordinate().getLongitude()
-                    ));
+                // bitmap vs set
+                Pipeline pipeline = jedis.pipelined();
+                IntStream.rangeClosed(0, 100000).forEach(i -> {
+                    pipeline.sadd("request-somepage-set-20250805", String.valueOf(i), "1");
+                    pipeline.setbit("request-somepage-bit-20250805", i, true);
+
+                    if(i == 1000) {
+                        pipeline.sync();
+                    }
+
+                    pipeline.sync();
                 });
-
-                jedis.unlink("stores2:geo");
             }
         }
     }
