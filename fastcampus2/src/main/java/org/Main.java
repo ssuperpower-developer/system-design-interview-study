@@ -1,14 +1,13 @@
 package org;
 
+import redis.clients.jedis.GeoCoordinate;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.resps.Tuple;
+import redis.clients.jedis.args.GeoUnit;
+import redis.clients.jedis.params.GeoSearchParam;
+import redis.clients.jedis.resps.GeoRadiusResponse;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class Main {
     public static void main(String[] args) {
@@ -94,26 +93,57 @@ public class Main {
 //                jedis.hincrBy("users:2:info", "visits", 1);
 
                 // sorted set
-                var scores = new HashMap<String, Double>();
-                scores.put("user1", 100.0);
-                scores.put("user2", 30.0);
-                scores.put("user3", 50.0);
-                scores.put("user4", 80.0);
-                scores.put("user5", 15.0);
-                jedis.zadd("game2:scores", scores);
+//                var scores = new HashMap<String, Double>();
+//                scores.put("user1", 100.0);
+//                scores.put("user2", 30.0);
+//                scores.put("user3", 50.0);
+//                scores.put("user4", 80.0);
+//                scores.put("user5", 15.0);
+//                jedis.zadd("game2:scores", scores);
+//
+//                List<String> zrange = jedis.zrange("game2:scores", 0, Long.MAX_VALUE);
+//                zrange.forEach(System.out::println);
+//
+//                List<Tuple> tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
+//                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
+//
+//                System.out.println(jedis.zcard("game2:scores"));
+//
+//                jedis.zincrby("game2:scores", 100.0, "user5");
+//
+//                tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
+//                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
 
-                List<String> zrange = jedis.zrange("game2:scores", 0, Long.MAX_VALUE);
-                zrange.forEach(System.out::println);
+                // geo
+                jedis.geoadd("stores2:geo", 127.02985530619755, 37.49911212874, "some1");
+                jedis.geoadd("stores2:geo", 127.0333352287619, 37.491921163986234, "some2");
 
-                List<Tuple> tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
-                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
+                Double geodist = jedis.geodist("stores2:geo", "some1", "some2");
+                System.out.println(geodist);
 
-                System.out.println(jedis.zcard("game2:scores"));
+                List<GeoRadiusResponse> radiusResponses1 = jedis.geosearch(
+                        "stores2:geo",
+                        new GeoCoordinate(127.033, 37.495),
+                        500,
+                        GeoUnit.M
+                );
 
-                jedis.zincrby("game2:scores", 100.0, "user5");
+                List<GeoRadiusResponse> radiusResponses2 = jedis.geosearch("stores2:geo",
+                        new GeoSearchParam()
+                                .fromLonLat(new GeoCoordinate(127.033, 37.495))
+                                .byRadius(500, GeoUnit.M)
+                                .withCoord()
+                );
 
-                tuples = jedis.zrangeWithScores("game2:scores", 0, Long.MAX_VALUE);
-                tuples.forEach(i -> System.out.printf("%s %f%n", i.getElement(), i.getScore()));
+                radiusResponses2.forEach(response -> {
+                    System.out.println("%s %f %f".formatted(
+                            response.getMemberByString(),
+                            response.getCoordinate().getLatitude(),
+                            response.getCoordinate().getLongitude()
+                    ));
+                });
+
+                jedis.unlink("stores2:geo");
             }
         }
     }
