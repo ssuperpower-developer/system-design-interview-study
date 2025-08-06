@@ -1,0 +1,99 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### 환경 변수 및 설정 파일 ###
+.env
+.env.local
+.env.dev
+.env.prod
+application-local.yml
+application-dev.yml
+application-prod.yml
+
+### 로그 파일 ###
+*.log
+logs/
+reactive-logs/
+
+### Redis 관련 ###
+# Redis 덤프 파일
+dump.rdb
+# Redis AOF 파일
+appendonly.aof
+# Redis 설정 백업
+redis.conf.backup
+
+### WebFlux/리액티브 관련 ###
+# 리액터 메모리 덤프
+reactor-*.hprof
+# 비동기 처리 임시 데이터
+async-temp/
+# 스트림 처리 임시 파일
+stream-data/
+
+### 대기열 시스템 특화 ###
+# 대기열 상태 스냅샷
+queue-snapshots/
+# 실시간 이벤트 로그
+event-logs/
+# 성능 모니터링 데이터
+performance-data/
+# 부하 테스트 결과
+load-test-results/
+
+### 기타 개발 관련 ###
+*.pid
+*.seed
+*.pid.lock
+.nyc_output
+.coverage
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Windows ###
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### 임시 캐시 데이터 ###
+cache-data/
+temp-cache/
+session-store/
