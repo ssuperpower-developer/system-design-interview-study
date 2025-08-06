@@ -1,0 +1,74 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### 환경 변수 및 설정 파일 ###
+.env
+.env.local
+.env.dev
+.env.prod
+application-local.yml
+application-dev.yml
+application-prod.yml
+
+### 로그 파일 ###
+*.log
+logs/
+
+### 기타 개발 관련 ###
+*.pid
+*.seed
+*.pid.lock
+.nyc_output
+.coverage
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Windows ###
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### Queue System 관련 ###
+# 대기열 데이터 임시 파일
+queue-data/
+temp-queue/
+# 성능 테스트 결과
+performance-test-results/
