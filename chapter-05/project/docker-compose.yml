@@ -1,0 +1,104 @@
+services:
+  # Node Exporter - 시스템 메트릭 수집 (CPU, 메모리, 디스크)
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro                  # 호스트 프로세스 정보 (읽기 전용)
+      - /sys:/host/sys:ro                    # 호스트 시스템 정보 (읽기 전용)
+      - /:/rootfs:ro
+    command: # Node Exporter 가 시스템 정보를 어디서 읽을지 설정
+      - '--path.procfs=/host/proc'           # 프로세스 정보 경로 설정
+      - '--path.rootfs=/rootfs'              # 루트 파일시스템 경로 설정
+      - '--path.sysfs=/host/sys'             # 시스템 정보 경로 설정
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'  # 제외할 마운트 포인트
+    networks:
+      - monitoring
+    restart: unless-stopped   # 컨테이너 자동 재시작
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'     # 설정 파일 경로
+      - '--storage.tsdb.path=/prometheus'                  # 데이터 저장 경로
+      - '--web.enable-lifecycle'                           # 설정 리로드 가능
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - monitoring
+    restart: unless-stopped   # 자동 재시작
+    depends_on:
+      - node-exporter   # node-exporter가 먼저 실행되어야 한다.
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # 비밀번호 설정
+    volumes:
+      - grafana_data:/var/lib/grafana       # Grafana 데이터 영구 저장
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning  # 자동 설정
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - prometheus       # 프로메테우스가 먼저 실행되어야 한다.
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    env_file:
+      - .env
+    environment:
+      - GMAIL_USERNAME=${GMAIL_USERNAME}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml  # 설정 파일
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'  # 설정 파일 경로
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  app:
+    build: .                                # 현재 디렉토리에서 Dockerfile로 빌드
+    container_name: spring-app              # 컨테이너 이름
+    ports:
+      - "8080:8080"                         # 외부:내부 포트 (Spring Boot 기본 포트)
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker       # Docker 환경용 프로파일
+    networks:
+      - monitoring                          # monitoring 네트워크 사용
+    restart: unless-stopped                 # 자동 재시작
+    depends_on:
+      - prometheus                          # prometheus가 먼저 실행되어야 함
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]  # 헬스체크
+      interval: 30s                         # 30초마다 체크
+      timeout: 10s                          # 10초 타임아웃
+      retries: 3                            # 3번 재시도
+      start_period: 60s                     # 시작 후 60초 대기
+
+
+networks:
+  monitoring:
+    driver: bridge
+
+# 컨테이너가 날아가도 남겨둘 데이터들
+volumes:
+  prometheus_data:
+  grafana_data:
