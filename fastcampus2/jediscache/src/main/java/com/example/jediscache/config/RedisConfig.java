@@ -1,6 +1,7 @@
 package com.example.jediscache.config;
 
 import com.example.jediscache.domain.entity.User;
+import com.example.jediscache.domain.service.MessageListenService;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -12,10 +13,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import redis.clients.jedis.JedisPool;
+
+import java.nio.channels.Channel;
 
 @Configuration
 public class RedisConfig {
@@ -59,5 +65,23 @@ public class RedisConfig {
         template.setValueSerializer(new GenericJackson2JsonRedisSerializer(objectMapper));
 
         return template;
+    }
+
+
+    // pub/sub
+    @Bean
+    MessageListenerAdapter messageListenerAdapter() {
+        return new MessageListenerAdapter(new MessageListenService());
+    }
+
+    @Bean
+    RedisMessageListenerContainer redisMessageListenerContainer(
+            RedisConnectionFactory connectionFactory,
+            MessageListenerAdapter listener
+    ) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        container.addMessageListener(listener, ChannelTopic.of("users:unregister"));
+        return container;
     }
 }
