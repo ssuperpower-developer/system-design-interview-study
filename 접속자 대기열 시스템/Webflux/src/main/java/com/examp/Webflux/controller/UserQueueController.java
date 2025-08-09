@@ -39,4 +39,13 @@ public class UserQueueController {
         return userQueueService.allowUser(queue, count)
                 .map(allowed -> new AllowUserResponse(count, allowed));
     }
+
+    @GetMapping("/allowed")
+    public Mono<ResponseEntity<Boolean>> isAllowed(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "user_id") Long userId
+    ) {
+        return userQueueService.isAllowed(queue, userId)
+                .map(ResponseEntity::ok);
+    }
 }

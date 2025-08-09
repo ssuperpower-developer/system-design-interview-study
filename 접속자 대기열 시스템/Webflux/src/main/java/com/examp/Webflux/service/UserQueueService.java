@@ -39,7 +39,12 @@ public class UserQueueService {
                 });
     }
 
-    //진입이 가능한 상태인지 조회
+    //진입이 가능한 상태인지 조회 - queue에 찾고자 하는 UserId가 있다면 현재 반환가능하다고 판단
+    public Mono<Boolean> isAllowed(final String queue, final Long userId) {
+        return reactiveRedisTemplate.opsForZSet().rank(USER_QUEUE_PROCEED_KEY.formatted(queue), userId.toString())
+                .defaultIfEmpty(-1L)
+                .map(rank -> rank >= 0);
+    }
 
 
     //집입 허용
