@@ -1,5 +1,6 @@
 package com.examp.Webflux.controller;
 
+import com.examp.Webflux.dto.AllowUserResponse;
 import com.examp.Webflux.dto.RegisterUserResponse;
 import com.examp.Webflux.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
@@ -30,4 +31,12 @@ public class UserQueueController {
                 .map(RegisterUserResponse::new);
     }
 
+    @PostMapping("/allow")
+    public Mono<AllowUserResponse> allowUser(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "count") Long count
+    ) {
+        return userQueueService.allowUser(queue, count)
+                .map(allowed -> new AllowUserResponse(count, allowed));
+    }
 }
