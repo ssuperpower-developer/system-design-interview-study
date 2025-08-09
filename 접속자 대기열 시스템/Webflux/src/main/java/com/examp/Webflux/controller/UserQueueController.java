@@ -1,6 +1,7 @@
 package com.examp.Webflux.controller;
 
 import com.examp.Webflux.dto.AllowUserResponse;
+import com.examp.Webflux.dto.RankNumberResponse;
 import com.examp.Webflux.dto.RegisterUserResponse;
 import com.examp.Webflux.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
@@ -48,4 +49,14 @@ public class UserQueueController {
         return userQueueService.isAllowed(queue, userId)
                 .map(ResponseEntity::ok);
     }
+
+    @GetMapping("/rank")
+    public Mono<RankNumberResponse> getRankUser(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "user_id") Long userId
+    ) {
+        return userQueueService.getRank(queue, userId)
+                .map(RankNumberResponse::new);
+    }
+
 }
