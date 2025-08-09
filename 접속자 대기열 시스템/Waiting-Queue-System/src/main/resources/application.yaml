@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: Waiting-Queue-System
+
+server:
+  port: 9000
