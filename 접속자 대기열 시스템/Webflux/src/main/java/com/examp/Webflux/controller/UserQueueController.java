@@ -1,5 +1,6 @@
 package com.examp.Webflux.controller;
 
+import com.examp.Webflux.dto.RegisterUserResponse;
 import com.examp.Webflux.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +23,9 @@ public class UserQueueController {
     private final UserQueueService userQueueService;
 
     @PostMapping("")
-    public Mono<?> registerUser(@RequestParam(name = "user_id") Long userId) {
-        return userQueueService.registerWaitQueue(userId);
+    public Mono<RegisterUserResponse> registerUser(@RequestParam(name = "user_id") Long userId) {
+        return userQueueService.registerWaitQueue(userId)
+                .map(RegisterUserResponse::new);
     }
 
 }
