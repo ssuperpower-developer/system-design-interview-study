@@ -36,8 +36,21 @@
             .then(response => response.json())
             .then(isAllowed => {
                 if (isAllowed) {
-                    window.location.href = redirectUrl;
+                    // 진입 허용시 touch API 먼저 호출하여 쿠키 설정
+                    fetch(`/touch?queue=${queue}&user_id=${userId}`)
+                        .then(() => {
+                            // touch 성공 후 리다이렉트
+                            window.location.href = redirectUrl;
+                        })
+                        .catch(error => {
+                            console.error('Touch API 호출 실패:', error);
+                            // 에러가 있어도 일단 리다이렉트
+                            window.location.href = redirectUrl;
+                        });
                 }
+            })
+            .catch(error => {
+                console.error('상태 확인 실패:', error);
             });
     }
 

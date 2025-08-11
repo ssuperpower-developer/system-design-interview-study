@@ -9,10 +9,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import reactor.test.StepVerifier;
+import lombok.extern.slf4j.Slf4j;
 
 @SpringBootTest
 @Import(EmbeddedRedisConfig.class)
 @ActiveProfiles("test")
+@Slf4j
 class UserQueueServiceTest {
 
     @Autowired
@@ -67,6 +69,24 @@ class UserQueueServiceTest {
                         userQueueService.registerWaitQueue("default", 2L)
                                 .then(userQueueService.isAllowed("default", 2L))
                 )
+                .expectNext(false)
+                .verifyComplete();
+    }
+
+    @Test
+    void generateToken() {
+        StepVerifier.create(userQueueService.generateToken("default", 1L))
+                .expectNext("8b75d74c2e152f3e9566da613179c2fa9458f830d2e305a879fd1a6821fbca54")
+                .verifyComplete();
+    }
+
+    @Test
+    void isAllowedByToken() {
+        StepVerifier.create(userQueueService.isAllowedByToken("default", 1L, "8b75d74c2e152f3e9566da613179c2fa9458f830d2e305a879fd1a6821fbca54"))
+                .expectNext(true)
+                .verifyComplete();
+
+        StepVerifier.create(userQueueService.isAllowedByToken("default", 1L, "invalid-token"))
                 .expectNext(false)
                 .verifyComplete();
     }

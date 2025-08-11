@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 
 /**
@@ -57,6 +60,13 @@ public class UserQueueService {
                 .map(rank -> rank >= 0);
     }
 
+    public Mono<Boolean> isAllowedByToken(final String queue, final Long userId, final String token) {
+        return this.generateToken(queue, userId)
+                .filter(genToken -> genToken.equalsIgnoreCase(token))
+                .map(i -> true)
+                .defaultIfEmpty(false);
+    }
+
 
     //집입 허용
     public Mono<Long> allowUser(final String queue, Long count) {
@@ -69,6 +79,25 @@ public class UserQueueService {
         return reactiveRedisTemplate.opsForZSet().rank(USER_QUEUE_WAIT_KEY.formatted(queue), userId.toString())
                 .defaultIfEmpty(-1L)
                 .map(rank -> rank >= 0 ? rank + 1 : rank);
+    }
+
+    public Mono<String> generateToken(final String queue, final Long userId) {
+        return Mono.fromCallable(() -> {
+            try {
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                var input = "user-queue-%s-%d".formatted(queue, userId);
+                byte[] encodedHash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+
+                StringBuilder hexString = new StringBuilder();
+                for (byte aByte : encodedHash) {
+                    hexString.append(String.format("%02x", aByte));
+                }
+                log.info("Generated token: {}", hexString.toString());
+                return hexString.toString();
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException("SHA-256 not available", e);
+            }
+        });
     }
 
     //서버가 시작한 뒤 5초 뒤에 3초 간격으로
