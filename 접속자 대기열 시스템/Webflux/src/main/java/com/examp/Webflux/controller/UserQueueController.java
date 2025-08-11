@@ -1,0 +1,104 @@
+package com.examp.Webflux.controller;
+
+import com.examp.Webflux.dto.AllowUserResponse;
+import com.examp.Webflux.dto.RankNumberResponse;
+import com.examp.Webflux.dto.RegisterUserResponse;
+import com.examp.Webflux.service.UserQueueService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpCookie;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.util.Optional;
+
+/**
+ * packageName   : com.examp.Webflux.controller
+ * Author        : imhyeong-gyu
+ * Data          : 2025. 8. 8.
+ * Description   :
+ */
+
+@RestController
+@RequestMapping("/api/v1/queue")
+@RequiredArgsConstructor
+@Slf4j
+public class UserQueueController {
+
+    private final UserQueueService userQueueService;
+
+    @PostMapping("")
+    public Mono<RegisterUserResponse> registerUser(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "user_id") Long userId) {
+        return userQueueService.registerWaitQueue(queue, userId)
+                .map(RegisterUserResponse::new);
+    }
+
+    @PostMapping("/allow")
+    public Mono<AllowUserResponse> allowUser(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "count") Long count
+    ) {
+        return userQueueService.allowUser(queue, count)
+                .map(allowed -> new AllowUserResponse(count, allowed));
+    }
+
+    @GetMapping("/allowed")
+    public Mono<ResponseEntity<Boolean>> isAllowed(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "user_id") Long userId,
+            ServerWebExchange exchange
+    ) {
+        return extractTokenFromCookie(queue, userId, exchange)
+                .flatMap(token -> userQueueService.isAllowedByToken(queue, userId, token))
+                .doOnNext(allowed -> log.info("allowed API 호출 (토큰 있음) - queue: {}, userId: {}, allowed: {}", queue, userId, allowed))
+                .switchIfEmpty(
+                        // 토큰이 없으면 proceed 큐에서 직접 확인
+                        userQueueService.isAllowed(queue, userId)
+                                .doOnNext(allowed -> log.info("allowed API 호출 (토큰 없음) - queue: {}, userId: {}, allowed: {}", queue, userId, allowed))
+                )
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.ok(false));
+    }
+
+    @GetMapping("/rank")
+    public Mono<RankNumberResponse> getRankUser(
+            @RequestParam(name = "queue", defaultValue = "default") String queue,
+            @RequestParam(name = "user_id") Long userId
+    ) {
+        return userQueueService.getRank(queue, userId)
+                .map(RankNumberResponse::new);
+    }
+
+    @GetMapping("/touch")
+    Mono<?> touch(@RequestParam(name = "queue", defaultValue = "default") String queue,
+                  @RequestParam(name = "user_id") Long userId,
+                  ServerWebExchange exchange) {
+
+        return userQueueService.generateToken(queue, userId)
+                .flatMap(token -> {
+                    exchange.getResponse().addCookie(
+                            ResponseCookie
+                                    .from("user-queue-%s-%d-token".formatted(queue,userId), token)
+                                    .maxAge(Duration.ofSeconds(300))
+                                    .path("/")
+                                    .build()
+                    );
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<String> extractTokenFromCookie(String queue, Long userId,ServerWebExchange exchange) {
+        String cookieName = "user-queue-%s-%d-token".formatted(queue, userId);
+        return Mono.justOrEmpty(
+                Optional.ofNullable(exchange.getRequest().getCookies().getFirst(cookieName))
+                        .map(HttpCookie::getValue)
+        );
+    }
+}
