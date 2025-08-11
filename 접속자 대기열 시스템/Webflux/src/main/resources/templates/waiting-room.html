@@ -35,6 +35,7 @@
         fetch(`/api/v1/queue/allowed?queue=${queue}&user_id=${userId}`)
             .then(response => response.json())
             .then(isAllowed => {
+                console.log('isAllowed 응답:', isAllowed, '타입:', typeof isAllowed);
                 if (isAllowed) {
                     // 진입 허용시 touch API 먼저 호출하여 쿠키 설정
                     fetch(`/api/v1/queue/touch?queue=${queue}&user_id=${userId}`)

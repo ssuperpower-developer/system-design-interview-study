@@ -5,6 +5,8 @@ import com.examp.Webflux.dto.RankNumberResponse;
 import com.examp.Webflux.dto.RegisterUserResponse;
 import com.examp.Webflux.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpCookie;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -13,6 +15,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * packageName   : com.examp.Webflux.controller
@@ -24,6 +27,7 @@ import java.time.Duration;
 @RestController
 @RequestMapping("/api/v1/queue")
 @RequiredArgsConstructor
+@Slf4j
 public class UserQueueController {
 
     private final UserQueueService userQueueService;
@@ -48,10 +52,19 @@ public class UserQueueController {
     @GetMapping("/allowed")
     public Mono<ResponseEntity<Boolean>> isAllowed(
             @RequestParam(name = "queue", defaultValue = "default") String queue,
-            @RequestParam(name = "user_id") Long userId
+            @RequestParam(name = "user_id") Long userId,
+            ServerWebExchange exchange
     ) {
-        return userQueueService.isAllowed(queue, userId)
-                .map(ResponseEntity::ok);
+        return extractTokenFromCookie(queue, userId, exchange)
+                .flatMap(token -> userQueueService.isAllowedByToken(queue, userId, token))
+                .doOnNext(allowed -> log.info("allowed API 호출 (토큰 있음) - queue: {}, userId: {}, allowed: {}", queue, userId, allowed))
+                .switchIfEmpty(
+                        // 토큰이 없으면 proceed 큐에서 직접 확인
+                        userQueueService.isAllowed(queue, userId)
+                                .doOnNext(allowed -> log.info("allowed API 호출 (토큰 없음) - queue: {}, userId: {}, allowed: {}", queue, userId, allowed))
+                )
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.ok(false));
     }
 
     @GetMapping("/rank")
@@ -72,12 +85,20 @@ public class UserQueueController {
                 .flatMap(token -> {
                     exchange.getResponse().addCookie(
                             ResponseCookie
-                                    .from("user-queue-%s-token".formatted(queue), token)
+                                    .from("user-queue-%s-%d-token".formatted(queue,userId), token)
                                     .maxAge(Duration.ofSeconds(300))
                                     .path("/")
                                     .build()
                     );
                     return Mono.empty();
                 });
+    }
+
+    private Mono<String> extractTokenFromCookie(String queue, Long userId,ServerWebExchange exchange) {
+        String cookieName = "user-queue-%s-%d-token".formatted(queue, userId);
+        return Mono.justOrEmpty(
+                Optional.ofNullable(exchange.getRequest().getCookies().getFirst(cookieName))
+                        .map(HttpCookie::getValue)
+        );
     }
 }

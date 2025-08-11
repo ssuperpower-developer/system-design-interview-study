@@ -61,9 +61,13 @@ public class UserQueueService {
     }
 
     public Mono<Boolean> isAllowedByToken(final String queue, final Long userId, final String token) {
+        log.info("토큰 검증 - queue: {}, userId: {}, token: {}", queue, userId, token);
+
         return this.generateToken(queue, userId)
+                .doOnNext(genToken -> log.info("생성된 토큰: {}, 일치: {}", genToken, genToken.equalsIgnoreCase(token)))
                 .filter(genToken -> genToken.equalsIgnoreCase(token))
                 .map(i -> true)
+                .doOnTerminate(() -> log.info("토큰 검증 완료"))
                 .defaultIfEmpty(false);
     }
 
@@ -101,7 +105,7 @@ public class UserQueueService {
     }
 
     //서버가 시작한 뒤 5초 뒤에 3초 간격으로
-    @Scheduled(initialDelay = 5000, fixedDelay = 10000)
+    @Scheduled(initialDelay = 5000, fixedDelay = 3000)
     public void scheduleAllowUser(){
 
         if (!scheduling) {
