@@ -37,7 +37,7 @@
             .then(isAllowed => {
                 if (isAllowed) {
                     // 진입 허용시 touch API 먼저 호출하여 쿠키 설정
-                    fetch(`/touch?queue=${queue}&user_id=${userId}`)
+                    fetch(`/api/v1/queue/touch?queue=${queue}&user_id=${userId}`)
                         .then(() => {
                             // touch 성공 후 리다이렉트
                             window.location.href = redirectUrl;
