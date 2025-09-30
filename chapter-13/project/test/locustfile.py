@@ -66,7 +66,7 @@ class ProgressiveTypingUser(FastHttpUser):
         try:
             response = self.client.get("/health", timeout=30)
             if response.status_code == 200:
-                print(f"✅ User {self.environment.runner.user_count}: Health check OK")
+                pass
             else:
                 print(f"⚠️ User {self.environment.runner.user_count}: Health check failed - {response.status_code}")
         except Exception as e:

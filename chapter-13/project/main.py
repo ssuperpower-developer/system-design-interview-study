@@ -20,7 +20,6 @@ async def lifespan(app: FastAPI):
         decode_responses=True,
         max_connections=50,  # Worker당 50개 연결
         socket_keepalive=True,
-        socket_keepalive_options=(1, 3, 5),
         health_check_interval=30
     )
 
@@ -48,7 +47,9 @@ async def read_root(request: Request):
 @app.get("/search", response_class=HTMLResponse)
 async def search(request: Request, q: str = ""):
     """극한 성능 최적화"""
-    suggestions = redis_client.zrevrange(f"trie:{q.lower()}", 0, 4) if q else []
+    suggestions = await redis_client.zrevrange(f"trie:{q.lower()}", 0, 4)
+    # 🔧 FIX: None 체크
+    suggestions = suggestions if suggestions is not None else []
 
     return templates.TemplateResponse(
         "suggestions.html",

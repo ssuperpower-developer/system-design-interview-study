@@ -138,14 +138,6 @@ spec:
           value: "uvloop"
         - name: UVICORN_HTTP
           value: "httptools"
-        - name: REDIS_MAX_CONNECTIONS
-          value: "500"
-        - name: REDIS_CONNECTION_POOL_SIZE
-          value: "300"
-        - name: REDIS_SOCKET_KEEPALIVE
-          value: "true"
-        - name: REDIS_SOCKET_KEEPALIVE_OPTIONS
-          value: "1,10,3"  # 더 적극적인 keepalive
         - name: PYTHONOPTIMIZE
           value: "2"
         - name: PYTHONDONTWRITEBYTECODE
@@ -158,10 +150,6 @@ spec:
           value: "2000"
         - name: GUNICORN_MAX_REQUESTS
           value: "0"
-        - name: REDIS_POOL_RETRY_ON_TIMEOUT
-          value: "true"
-        - name: REDIS_HEALTH_CHECK_INTERVAL
-          value: "30"
         readinessProbe:
           httpGet:
             path: /health
