@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>대기열</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #container {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <h1>대기열</h1>
+    <p>당신의 대기 순번은 <span th:text="${number}"></span>번 입니다.</p>
+    <p>잠시만 기다려주세요. 자동으로 페이지가 이동됩니다.</p>
+    <p>현재 시간: <span id="clock"></span></p>
+</div>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const userId = /*[[${userId}]]*/ 0;
+    const queue = /*[[${queue}]]*/ 'default';
+    const redirectUrl = /*[[${redirectUrl}]]*/ '/';
+
+    function checkStatus() {
+        fetch(`/api/v1/queue/allowed?queue=${queue}&user_id=${userId}`)
+            .then(response => response.json())
+            .then(isAllowed => {
+                console.log('isAllowed 응답:', isAllowed, '타입:', typeof isAllowed);
+                if (isAllowed) {
+                    // 진입 허용시 touch API 먼저 호출하여 쿠키 설정
+                    fetch(`/api/v1/queue/touch?queue=${queue}&user_id=${userId}`)
+                        .then(() => {
+                            // touch 성공 후 리다이렉트
+                            window.location.href = redirectUrl;
+                        })
+                        .catch(error => {
+                            console.error('Touch API 호출 실패:', error);
+                            // 에러가 있어도 일단 리다이렉트
+                            window.location.href = redirectUrl;
+                        });
+                }
+            })
+            .catch(error => {
+                console.error('상태 확인 실패:', error);
+            });
+    }
+
+    function updateClock() {
+        const now = new Date();
+        const clock = document.getElementById('clock');
+        clock.innerText = now.toLocaleTimeString();
+    }
+
+    setInterval(checkStatus, 3000); // Check every 3 seconds
+    setInterval(updateClock, 1000); // Update clock every second
+    /*]]>*/
+</script>
+</body>
+</html>
